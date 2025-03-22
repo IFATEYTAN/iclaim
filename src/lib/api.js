@@ -1,220 +1,183 @@
-// /src/lib/api.js
-import useStore from '../store/useStore';
-
+// קבוע לקידומת ה-API
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-/**
- * פונקציית עזר לביצוע בקשות HTTP
- */
-async function fetchWithAuth(endpoint, options = {}) {
-  const store = useStore.getState();
-  const { auth } = store;
-  
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-  };
-  
-  // הוספת טוקן אימות אם יש
-  if (auth.user?.token) {
-    defaultHeaders['Authorization'] = `Bearer ${auth.user.token}`;
-  }
-  
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      ...defaultHeaders,
+// פונקציה לטיפול בבקשות
+const handleRequest = async (url, options = {}) => {
+  try {
+    // הוספת טוקן אימות אם קיים
+    const token = localStorage.getItem('token');
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
-    },
-  });
-  
-  // בדיקת סטטוס התגובה
-  if (!response.ok) {
-    // אם יש בעיה בהרשאות, ניתוק משתמש
-    if (response.status === 401) {
-      store.logout();
-    }
-    
-    // הכנת הודעת שגיאה
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.message || 'אירעה שגיאה בתקשורת עם השרת');
-    error.status = response.status;
-    error.data = errorData;
-    throw error;
-  }
-  
-  // החזרת הנתונים אם הכל בסדר
-  return response.json();
-}
+    };
 
-/**
- * שירותי אימות משתמש
- */
-export const authAPI = {
-  login: async (credentials) => {
-    const store = useStore.getState();
-    store.setAuthLoading(true);
-    
-    try {
-      const data = await fetchWithAuth('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(credentials),
-      });
+    const response = await fetch(`${API_URL}${url}`, {
+      ...options,
+      headers,
+    });
+
+    // בדיקת סטטוס התגובה
+    if (!response.ok) {
+      if (response.status === 401) {
+        // במקרה של בעיית אימות, מנקה את הטוקן
+        localStorage.removeItem('token');
+      }
       
-      store.login(data);
-      return data;
-    } catch (error) {
-      store.setAuthError(error.message);
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || 'שגיאה בתקשורת עם השרת');
+      error.status = response.status;
+      error.data = errorData;
       throw error;
     }
-  },
-  
-  logout: async () => {
-    const store = useStore.getState();
-    
-    try {
-      await fetchWithAuth('/auth/logout', {
-        method: 'POST',
-      });
-      
-      store.logout();
-    } catch (error) {
-      console.error('Error during logout:', error);
-      // מתנתקים גם במקרה של שגיאה
-      store.logout();
+
+    // כאשר התגובה תקינה
+    if (response.status === 204) {
+      return null; // אין תוכן
     }
+
+    return response.json();
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+// =============== שירותי אימות ===============
+export const auth = {
+  // התחברות למערכת
+  login: async (credentials) => {
+    const data = await handleRequest('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+    
+    // שמירת הטוקן בלוקל סטורג'
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+    }
+    
+    return data.user;
   },
   
+  // התנתקות מהמערכת
+  logout: async () => {
+    localStorage.removeItem('token');
+    return handleRequest('/auth/logout', {
+      method: 'POST',
+    });
+  },
+  
+  // בדיקת משתמש נוכחי
+  getCurrentUser: async () => {
+    return handleRequest('/auth/me');
+  },
+  
+  // רישום למערכת
   register: async (userData) => {
-    return fetchWithAuth('/auth/register', {
+    return handleRequest('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
   },
 };
 
-/**
- * שירותי ניהול ברים
- */
-export const barsAPI = {
-  getAll: async () => {
-    const store = useStore.getState();
-    store.setBarsLoading(true);
-    
-    try {
-      const data = await fetchWithAuth('/bars');
-      store.setBars(data);
-      return data;
-    } catch (error) {
-      store.setBarsError(error.message);
-      throw error;
-    }
-  },
-  
-  getById: async (id) => {
-    return fetchWithAuth(`/bars/${id}`);
-  },
-  
-  create: async (barData) => {
-    const store = useStore.getState();
-    
-    try {
-      const data = await fetchWithAuth('/bars', {
-        method: 'POST',
-        body: JSON.stringify(barData),
-      });
-      
-      store.addBar(data);
-      return data;
-    } catch (error) {
-      store.setBarsError(error.message);
-      throw error;
-    }
-  },
-  
-  update: async (id, barData) => {
-    const store = useStore.getState();
-    
-    try {
-      const data = await fetchWithAuth(`/bars/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(barData),
-      });
-      
-      store.updateBar(data);
-      return data;
-    } catch (error) {
-      store.setBarsError(error.message);
-      throw error;
-    }
-  },
-  
-  delete: async (id) => {
-    const store = useStore.getState();
-    
-    try {
-      await fetchWithAuth(`/bars/${id}`, {
-        method: 'DELETE',
-      });
-      
-      store.deleteBar(id);
-    } catch (error) {
-      store.setBarsError(error.message);
-      throw error;
-    }
+// =============== שירותי דשבורד ===============
+export const dashboard = {
+  // קבלת נתוני סיכום
+  getSummary: async () => {
+    return handleRequest('/dashboard/summary');
   },
 };
 
-/**
- * שירותי ניהול תנועות כספיות
- */
-export const transactionsAPI = {
+// =============== שירותי ברים ===============
+export const bars = {
+  // קבלת כל הברים
   getAll: async (filters = {}) => {
-    const store = useStore.getState();
-    store.setTransactionsLoading(true);
-    
     const queryParams = new URLSearchParams();
+    
+    // הוספת פרמטרים לפילטרים
     Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
+      if (value !== undefined && value !== null && value !== '') {
         queryParams.append(key, value);
       }
     });
     
-    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const queryString = queryParams.toString() 
+      ? `?${queryParams.toString()}` 
+      : '';
     
-    try {
-      const data = await fetchWithAuth(`/transactions${queryString}`);
-      store.setTransactions(data);
-      return data;
-    } catch (error) {
-      store.setTransactionsError(error.message);
-      throw error;
-    }
+    return handleRequest(`/bars${queryString}`);
   },
   
+  // קבלת בר לפי מזהה
   getById: async (id) => {
-    return fetchWithAuth(`/transactions/${id}`);
+    return handleRequest(`/bars/${id}`);
   },
   
-  create: async (transactionData) => {
-    const store = useStore.getState();
-    
-    try {
-      const data = await fetchWithAuth('/transactions', {
-        method: 'POST',
-        body: JSON.stringify(transactionData),
-      });
-      
-      store.addTransaction(data);
-      return data;
-    } catch (error) {
-      store.setTransactionsError(error.message);
-      throw error;
-    }
+  // יצירת בר חדש
+  create: async (barData) => {
+    return handleRequest('/bars', {
+      method: 'POST',
+      body: JSON.stringify(barData),
+    });
+  },
+  
+  // עדכון בר קיים
+  update: async (id, barData) => {
+    return handleRequest(`/bars/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(barData),
+    });
+  },
+  
+  // מחיקת בר
+  delete: async (id) => {
+    return handleRequest(`/bars/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
+// =============== שירותי תנועות כספיות ===============
+export const transactions = {
+  // קבלת כל התנועות
+  getAll: async (filters = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    // הוספת פרמטרים לפילטרים
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        queryParams.append(key, value);
+      }
+    });
+    
+    const queryString = queryParams.toString() 
+      ? `?${queryParams.toString()}` 
+      : '';
+    
+    return handleRequest(`/transactions${queryString}`);
+  },
+  
+  // קבלת תנועה לפי מזהה
+  getById: async (id) => {
+    return handleRequest(`/transactions/${id}`);
+  },
+  
+  // יצירת תנועה חדשה
+  create: async (transactionData) => {
+    return handleRequest('/transactions', {
+      method: 'POST',
+      body: JSON.stringify(transactionData),
+    });
+  },
+};
+
+// ייצוא כל השירותים
 export default {
-  auth: authAPI,
-  bars: barsAPI,
-  transactions: transactionsAPI,
+  auth,
+  dashboard,
+  bars,
+  transactions,
 };

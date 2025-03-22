@@ -1,51 +1,70 @@
-// /src/App.jsx
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
-import Navbar from './components/layout/Navbar';
-import Footer from './components/layout/Footer';
-import Sidebar from './components/layout/Sidebar';
-import ProtectedRoute from './routes/ProtectedRoute';
-import useStore from './store/useStore';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { Helmet } from 'react-helmet-async';
+import useStore from './store/useStore';
 
-// Lazy-loaded components
-const Home = lazy(() => import('./pages/Home'));
-const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const BarManagement = lazy(() => import('./pages/BarManagement'));
-const TransactionManagement = lazy(() => import('./pages/TransactionManagement'));
-const Settings = lazy(() => import('./pages/Settings'));
+// Layouts
+import MainLayout from './layout/MainLayout';
+import AuthLayout from './layout/AuthLayout';
 
-function App() {
-  const { auth } = useStore();
-  
+// Pages
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import BarsPage from './pages/BarsPage';
+import TransactionsPage from './pages/TransactionsPage';
+import SettingsPage from './pages/SettingsPage';
+import NotFoundPage from './pages/NotFoundPage';
+
+const App = () => {
+  const { isAuthenticated, checkAuth } = useStore(state => ({
+    isAuthenticated: state.auth.isAuthenticated,
+    checkAuth: state.checkAuth
+  }));
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
   return (
-    <Router>
-      <div className="flex h-screen bg-background">
-        {auth.isAuthenticated && <Sidebar />}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <Navbar />
-          <main className="flex-1 overflow-y-auto p-4">
-            <Suspense fallback={<div className="flex items-center justify-center h-full">טוען...</div>}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                
-                <Route element={<ProtectedRoute />}>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/bars" element={<BarManagement />} />
-                  <Route path="/transactions" element={<TransactionManagement />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Route>
-              </Routes>
-            </Suspense>
-          </main>
-          <Footer />
-        </div>
-      </div>
+    <>
+      <Helmet>
+        <title>מערכת גורם מפנה</title>
+        <meta name="description" content="מערכת לניהול גורמים מפנים" />
+      </Helmet>
+      
+      <Router>
+        <Routes>
+          {/* Auth Routes */}
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" />} />
+          </Route>
+          
+          {/* App Routes - Protected */}
+          <Route 
+            element={
+              <MainLayout>
+                {isAuthenticated ? <Outlet /> : <Navigate to="/login" />}
+              </MainLayout>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/bars" element={<BarsPage />} />
+            <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+          
+          {/* Redirects */}
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+          
+          {/* 404 */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Router>
+      
       <Toaster position="top-left" richColors />
-    </Router>
+    </>
   );
-}
+};
 
 export default App;

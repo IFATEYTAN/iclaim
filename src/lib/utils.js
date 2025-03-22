@@ -1,17 +1,12 @@
-// /src/lib/utils.js
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-/**
- * פונקציית עזר לשילוב מחלקות Tailwind CSS
- */
+// פונקציית עזר לשילוב מחלקות Tailwind
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * פורמט מספרים כמחירים בש"ח
- */
+// פורמט סכומים כספיים
 export function formatCurrency(amount) {
   return new Intl.NumberFormat('he-IL', {
     style: 'currency',
@@ -20,10 +15,10 @@ export function formatCurrency(amount) {
   }).format(amount);
 }
 
-/**
- * פורמט תאריכים בפורמט עברי
- */
+// פורמט תאריכים לפורמט עברי
 export function formatDate(date) {
+  if (!date) return '';
+  
   return new Intl.DateTimeFormat('he-IL', {
     year: 'numeric',
     month: 'long',
@@ -31,65 +26,52 @@ export function formatDate(date) {
   }).format(new Date(date));
 }
 
-/**
- * השוואת אובייקטים עמוקה
- */
-export function deepEqual(obj1, obj2) {
-  if (obj1 === obj2) return true;
+// פורמט תאריך ושעה
+export function formatDateTime(date) {
+  if (!date) return '';
   
-  if (
-    typeof obj1 !== 'object' ||
-    typeof obj2 !== 'object' ||
-    obj1 === null ||
-    obj2 === null
-  ) {
-    return false;
-  }
-  
-  const keys1 = Object.keys(obj1);
-  const keys2 = Object.keys(obj2);
-  
-  if (keys1.length !== keys2.length) return false;
-  
-  for (const key of keys1) {
-    if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) {
-      return false;
-    }
-  }
-  
-  return true;
+  return new Intl.DateTimeFormat('he-IL', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(date));
 }
 
-/**
- * גישה בטוחה לערכים מקוננים
- */
-export function getNestedValue(obj, path, defaultValue = undefined) {
-  const keys = Array.isArray(path) ? path : path.split('.');
-  let result = obj;
-  
-  for (const key of keys) {
-    if (result === undefined || result === null) {
-      return defaultValue;
-    }
-    result = result[key];
-  }
-  
-  return result === undefined ? defaultValue : result;
+// יצירת מזהה ייחודי
+export function generateId() {
+  return Math.random().toString(36).substring(2, 15) + 
+         Math.random().toString(36).substring(2, 15);
 }
 
-/**
- * דחיית פעולה - שימושי למניעת ריבוי קריאות ברצף
- */
-export function debounce(func, wait) {
-  let timeout;
+// בדיקה אם אובייקט ריק
+export function isEmptyObject(obj) {
+  return obj && Object.keys(obj).length === 0 && obj.constructor === Object;
+}
+
+// קבלת שם מקוצר
+export function getInitials(name) {
+  if (!name) return '';
   
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
+  return name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase();
+}
+
+// פורמט מספר טלפון
+export function formatPhoneNumber(phoneNumber) {
+  if (!phoneNumber) return '';
+  
+  // ניקוי מספר הטלפון
+  const cleaned = phoneNumber.replace(/\D/g, '');
+  
+  // פורמט לפי תבנית ישראלית
+  if (cleaned.length === 10) {
+    return `${cleaned.substring(0, 3)}-${cleaned.substring(3, 10)}`;
+  }
+  
+  return phoneNumber;
 }
